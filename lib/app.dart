@@ -1626,6 +1626,7 @@ class _HomePageState extends State<HomePage> {
   List<SearchCategoryConfig> _categories = [];
   bool _loading = false;
   String? _error;
+  bool _hasRequestedContent = false;
   DateTime? _lastPressedAt;
 
   // 用户信息与搜索结果分页状态
@@ -1880,16 +1881,22 @@ class _HomePageState extends State<HomePage> {
 
       _pendingReloadSiteId = null;
       _pendingReloadConfigVersion = null;
+      final autoRefresh = _currentSite?.id == site.id && _hasRequestedContent;
       _hasInitializedSiteContext = true;
       _lastConfigVersion = configVersion;
       final operationGeneration = ++_contentOperationGeneration;
-      await _init(site, operationGeneration: operationGeneration);
+      await _init(
+        site,
+        operationGeneration: operationGeneration,
+        autoRefresh: autoRefresh,
+      );
     });
   }
 
   Future<void> _init(
     SiteConfig activeSite, {
     required int operationGeneration,
+    bool autoRefresh = false,
   }) async {
     if (!_isCurrentContentOperation(operationGeneration)) return;
 
@@ -1902,10 +1909,11 @@ class _HomePageState extends State<HomePage> {
       _selectedCategoryIndex = categories.isNotEmpty ? 0 : -1;
       _pageNumber = 1;
       _items.clear();
-      _hasMore = true;
+      _hasMore = false;
       _totalPages = 1;
-      _loading = true;
+      _loading = false;
       _error = null;
+      _hasRequestedContent = false;
       _sortBy = 'none';
       _sortAscending = false;
       _headerProgress = 1.0;
@@ -1940,15 +1948,15 @@ class _HomePageState extends State<HomePage> {
       unawaited(_checkForUpdates());
     }
 
-    // 仅在站点支持种子搜索功能时执行默认搜索
-    if (activeSite.features.supportTorrentSearch) {
+    // 冷启动与切换站点不自动加载；仅当前站点配置更新且用户已加载过内容时刷新。
+    if (autoRefresh &&
+        activeSite.features.supportTorrentSearch &&
+        _isCurrentContentOperation(operationGeneration)) {
       await _search(
         reset: true,
         siteConfig: activeSite,
         operationGeneration: operationGeneration,
       );
-    } else if (_isCurrentContentOperation(operationGeneration)) {
-      setState(() => _loading = false);
     }
   }
 
@@ -2425,6 +2433,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _loading = true;
         _error = null;
+        _hasRequestedContent = true;
       });
     }
     try {
@@ -3385,9 +3394,11 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      _items.isEmpty
-                                          ? '未找到相关种子'
-                                          : '没有符合筛选条件的种子',
+                                      !_hasRequestedContent
+                                          ? '尚未加载站点内容'
+                                          : (_items.isEmpty
+                                                ? '未找到相关种子'
+                                                : '没有符合筛选条件的种子'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
@@ -3399,7 +3410,9 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      '下拉刷新',
+                                      _hasRequestedContent
+                                          ? '下拉刷新'
+                                          : '点击搜索或下拉刷新加载',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall

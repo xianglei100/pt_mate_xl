@@ -43,6 +43,9 @@ void main() {
     expect(search.invocations.single.siteConfig.id, siteA.id);
 
     appState.selectSite(siteB);
+    await tester.pump();
+    await tester.pump();
+    await _submitSearchFromFab(tester);
     await _pumpUntil(tester, () => search.invocations.length == 2);
     expect(search.invocations.last.siteConfig.id, siteB.id);
 
@@ -376,7 +379,7 @@ void main() {
       appState,
       search,
       aggregateSearchService: aggregate,
-      expectInitialSearch: false,
+      triggerInitialSearch: false,
     );
     expect(find.byKey(const ValueKey('home-search-fab')), findsOneWidget);
     await _submitAggregate(tester);
@@ -421,7 +424,7 @@ Future<void> _pumpHome(
   _FakeAppState appState,
   _FakeHomeSearchExecutor search, {
   AggregateSearchService? aggregateSearchService,
-  bool expectInitialSearch = true,
+  bool triggerInitialSearch = true,
 }) async {
   tester.view.physicalSize = const Size(393, 852);
   tester.view.devicePixelRatio = 1;
@@ -446,11 +449,21 @@ Future<void> _pumpHome(
       ),
     ),
   );
-  if (expectInitialSearch) {
+  if (triggerInitialSearch) {
+    await _submitSearchFromFab(tester);
     await _pumpUntil(tester, () => search.invocations.isNotEmpty);
   } else {
     await tester.pumpAndSettle();
   }
+}
+
+Future<void> _submitSearchFromFab(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('home-search-fab')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('home-search-submit-button')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
