@@ -178,6 +178,29 @@ jobs:
     - name: Decode keystore
       run: |
         echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
+
+    - name: Verify keystore
+      env:
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        if [ ! -s android/app/keystore.jks ]; then
+          echo "android/app/keystore.jks is empty: KEYSTORE_BASE64 is missing or holds an unusable base64 payload."
+          exit 1
+        fi
+        if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+          echo "STORE_PASSWORD, KEY_PASSWORD and KEY_ALIAS must all be set."
+          exit 1
+        fi
+        if ! keytool -list -keystore android/app/keystore.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null; then
+          echo "Keystore cannot be opened with STORE_PASSWORD, or alias '$KEY_ALIAS' is not present in it."
+          exit 1
+        fi
+        if ! keytool -certreq -keystore android/app/keystore.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$KEY_PASSWORD" > /dev/null; then
+          echo "KEY_PASSWORD does not match the private key of alias '$KEY_ALIAS'."
+          exit 1
+        fi
       
     - name: Create key.properties
       run: |
