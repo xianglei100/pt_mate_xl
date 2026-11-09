@@ -195,6 +195,14 @@ class QbittorrentClient
     }
   }
 
+  /// 登录并返回可用于注入 WebView 的 Cookie 头（如 `SID=...`）。
+  ///
+  /// WebUI 的登录态是会话级 Cookie，冷启动后必然丢失，需要重新登录。
+  Future<String> loginAndGetCookieHeader() async {
+    await _login();
+    return _authCookieHeader!;
+  }
+
   /// 登录获取会话
   Future<void> _login() async {
     try {

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../services/downloader/downloader_config.dart';
+import '../services/downloader/qbittorrent_client.dart';
+import '../services/storage/storage_service.dart';
 import '../utils/url_launcher_helper.dart';
 import '../widgets/main_shell.dart';
 import '../widgets/responsive_layout.dart';
@@ -21,6 +23,8 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
   InAppWebViewController? _controller;
   bool _loading = true;
   String? _error;
+  String? _authCookie;
+  bool _authReady = false;
 
   String get _url => widget.config.baseUrl;
 
@@ -28,6 +32,61 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareWebView();
+  }
+
+  /// WebUI 的登录态是会话级 Cookie，冷启动后必然丢失，
+  /// 先用已存的下载器账号密码登录一次，把 SID 注入 WebView。
+  Future<void> _prepareWebView() async {
+    if (_supportsInAppWebView) {
+      await _loginToWebUi();
+    }
+    if (!mounted) return;
+    setState(() => _authReady = true);
+  }
+
+  Future<void> _loginToWebUi() async {
+    try {
+      final password = await StorageService.instance.loadDownloaderPassword(
+        widget.config.id,
+      );
+      if (password == null || password.isEmpty) return;
+
+      final client = QbittorrentClient(
+        config: widget.config,
+        password: password,
+      );
+      _authCookie = await client.loginAndGetCookieHeader();
+    } catch (_) {
+      // 登录失败就退回手动登录页
+    }
+  }
+
+  Future<void> _injectCookies() async {
+    final cookie = _authCookie;
+    if (cookie == null || cookie.isEmpty) return;
+
+    final uri = Uri.parse(_url);
+    final manager = CookieManager.instance();
+    for (final segment in cookie.split(';')) {
+      final separator = segment.indexOf('=');
+      if (separator <= 0) continue;
+      try {
+        await manager.setCookie(
+          url: WebUri(_url),
+          name: segment.substring(0, separator).trim(),
+          value: segment.substring(separator + 1).trim(),
+          domain: uri.host,
+          path: '/',
+          isHttpOnly: true,
+        );
+      } catch (_) {}
+    }
   }
 
   @override
@@ -126,6 +185,9 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
 
   Widget _buildWebView(BuildContext context) {
     final theme = Theme.of(context);
+    if (!_authReady) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return Column(
       children: [
         if (_loading) const LinearProgressIndicator(minHeight: 2),
@@ -166,14 +228,20 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
           ),
         Expanded(
           child: InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri(_url)),
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
               domStorageEnabled: true,
               useOnDownloadStart: true,
               mediaPlaybackRequiresUserGesture: false,
             ),
-            onWebViewCreated: (controller) => _controller = controller,
+            onWebViewCreated: (controller) async {
+              _controller = controller;
+              await _injectCookies();
+              if (!mounted) return;
+              await controller.loadUrl(
+                urlRequest: URLRequest(url: WebUri(_url)),
+              );
+            },
             onLoadStart: (controller, url) {
               if (!mounted) return;
               setState(() {
