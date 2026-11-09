@@ -44,6 +44,7 @@ import 'widgets/qb_speed_indicator.dart';
 import 'widgets/batch_progress_card.dart';
 import 'widgets/home_search_dialog.dart';
 import 'widgets/responsive_layout.dart';
+import 'widgets/main_shell.dart';
 import 'widgets/torrent_download_dialog.dart';
 import 'widgets/torrent_list_item.dart';
 import 'widgets/torrent_list_skeleton.dart';
@@ -1574,7 +1575,7 @@ class MTeamAppState extends State<MTeamApp> with WidgetsBindingObserver {
                   )
                 : appState.site == null
                 ? const ServerSettingsPage()
-                : const HomePage(),
+                : const MainShell(home: HomePage()),
           );
         },
       ),
@@ -3089,6 +3090,9 @@ class _HomePageState extends State<HomePage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) async {
             if (didPop) return;
+
+            // 常驻外壳里三个标签同时存在，只有正在显示主页时才处理返回键
+            if (!MainShellController.instance.isActiveRoute('/')) return;
 
             if (_isAggregateMode) {
               if (_aggregateSelectionMode) {

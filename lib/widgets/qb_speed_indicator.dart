@@ -7,6 +7,7 @@ import '../services/downloader/downloader_config.dart';
 import '../services/downloader/downloader_service.dart';
 import '../services/downloader/downloader_models.dart';
 import '../utils/format.dart';
+import 'main_shell.dart';
 import '../pages/downloader_settings_page.dart';
 import '../utils/screen_utils.dart';
 
@@ -30,7 +31,23 @@ class _QbSpeedIndicatorState extends State<QbSpeedIndicator> {
   @override
   void initState() {
     super.initState();
-    if (!widget.active) return;
+    if (widget.active) _startPolling();
+  }
+
+  @override
+  void didUpdateWidget(QbSpeedIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active == oldWidget.active) return;
+    if (widget.active) {
+      _startPolling();
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  void _startPolling() {
+    _timer?.cancel();
     _fetch();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _fetch());
   }
@@ -124,6 +141,23 @@ class _QbSpeedIndicatorState extends State<QbSpeedIndicator> {
 
   void _openDownloader() {
     if (!mounted) return;
+
+    final shell = MainShellController.instance;
+    if (shell.isAttached) {
+      final navigator = Navigator.of(context);
+      navigator.popUntil((route) => route.isFirst);
+      if (shell.activeRoute.value == '/download_tasks') {
+        navigator.push(
+          MaterialPageRoute(
+            builder: (_) => const DownloaderSettingsPage(),
+            settings: const RouteSettings(name: '/downloader_settings'),
+          ),
+        );
+      } else {
+        shell.openTab('/download_tasks');
+      }
+      return;
+    }
 
     // 检查当前是否已经在下载器设置页面
     final currentRoute = ModalRoute.of(context);

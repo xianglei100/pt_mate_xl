@@ -7,6 +7,7 @@ import '../services/downloader/downloader_models.dart';
 import '../utils/format.dart';
 
 import '../widgets/responsive_layout.dart';
+import '../widgets/main_shell.dart';
 import '../widgets/qb_speed_indicator.dart';
 import 'downloader_settings_page.dart';
 import 'package:pt_mate/utils/notification_helper.dart';
@@ -36,6 +37,10 @@ class DownloadTasksPage extends StatefulWidget {
 class _DownloadTasksPageState extends State<DownloadTasksPage> {
   Timer? _refreshTimer;
   StreamSubscription<String>? _configChangeSubscription;
+  final MainShellController _shell = MainShellController.instance;
+
+  // 页面常驻后是否仍处于前台标签
+  bool _tabActive = true;
 
   // 状态变量
   bool _isLoading = true;
@@ -56,8 +61,13 @@ class _DownloadTasksPageState extends State<DownloadTasksPage> {
   @override
   void initState() {
     super.initState();
+    _tabActive = _shell.isActiveRoute('/download_tasks');
+    _shell.activeRoute.addListener(_onShellRouteChanged);
+
     _loadDownloaderConfig();
-    _startAutoRefresh();
+    if (_tabActive) {
+      _startAutoRefresh();
+    }
 
     // 监听配置变更
     _configChangeSubscription = DownloaderService.instance.configChangeStream
@@ -70,6 +80,7 @@ class _DownloadTasksPageState extends State<DownloadTasksPage> {
 
   @override
   void dispose() {
+    _shell.activeRoute.removeListener(_onShellRouteChanged);
     _refreshTimer?.cancel();
     _configChangeSubscription?.cancel();
     _searchController.dispose();
@@ -79,11 +90,28 @@ class _DownloadTasksPageState extends State<DownloadTasksPage> {
 
   // 启动自动刷新
   void _startAutoRefresh() {
+    _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_downloaderConfig != null && _password != null && mounted) {
         _loadTasks(silent: true); // 使用静默模式
       }
     });
+  }
+
+  /// 切走标签时停掉轮询，切回时恢复，避免页面常驻后一直在后台请求下载器。
+  void _onShellRouteChanged() {
+    final active = _shell.isActiveRoute('/download_tasks');
+    if (active == _tabActive || !mounted) return;
+    setState(() => _tabActive = active);
+    if (active) {
+      _startAutoRefresh();
+      if (_downloaderConfig != null) {
+        _loadTasks(silent: true);
+      }
+    } else {
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
   }
 
   // 加载下载器配置
@@ -206,7 +234,7 @@ class _DownloadTasksPageState extends State<DownloadTasksPage> {
       currentRoute: '/download_tasks',
       appBar: AppBar(
         title: const Text('下载管理'),
-        actions: const [QbSpeedIndicator(active: true)],
+        actions: [QbSpeedIndicator(active: _tabActive)],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

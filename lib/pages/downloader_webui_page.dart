@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../services/downloader/downloader_config.dart';
 import '../utils/url_launcher_helper.dart';
+import '../widgets/main_shell.dart';
 import '../widgets/responsive_layout.dart';
 
 /// 在应用内打开下载器的 WebUI 页面
@@ -52,6 +53,10 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (didPop) return;
 
+        // 页面常驻在标签外壳里，只有正在显示时才能处理返回键
+        final shell = MainShellController.instance;
+        if (!shell.isActiveRoute('/downloader_webui')) return;
+
         final controller = _controller;
         if (controller != null) {
           try {
@@ -60,6 +65,11 @@ class _DownloaderWebUiPageState extends State<DownloaderWebUiPage> {
               return;
             }
           } catch (_) {}
+        }
+
+        if (shell.isAttached) {
+          shell.openTab('/');
+          return;
         }
 
         if (context.mounted) {

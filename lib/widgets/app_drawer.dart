@@ -9,6 +9,7 @@ import '../services/downloader/downloader_config.dart';
 import '../services/storage/storage_service.dart';
 import '../utils/notification_helper.dart';
 import '../app.dart';
+import 'main_shell.dart';
 
 class AppDrawer extends StatelessWidget {
   final VoidCallback? onSettingsChanged;
@@ -21,6 +22,46 @@ class AppDrawer extends StatelessWidget {
     this.currentRoute,
     this.isFixedSidebar = false,
   });
+
+  /// 常驻外壳内的标签：关掉抽屉、退回外壳根路由，再交给外壳切换。
+  void _selectTab(BuildContext context, String target) {
+    final navigator = Navigator.of(context);
+    if (!isFixedSidebar) navigator.pop();
+    navigator.popUntil((route) => route.isFirst);
+    MainShellController.instance.openTab(target);
+  }
+
+  /// 附属页面在启用外壳后统一压栈；否则平板的 pushReplacement 会把外壳顶掉。
+  Future<void> _pushPage(
+    BuildContext context,
+    String target,
+    WidgetBuilder builder, {
+    VoidCallback? onReturn,
+  }) async {
+    final navigator = Navigator.of(context);
+    if (!isFixedSidebar) navigator.pop();
+    if (currentRoute == target) return;
+
+    if (MainShellController.instance.isAttached || !isFixedSidebar) {
+      await navigator.push(
+        MaterialPageRoute(
+          builder: builder,
+          settings: RouteSettings(name: target),
+        ),
+      );
+      onReturn?.call();
+      return;
+    }
+
+    await navigator.pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation1, animation2) => builder(context),
+        settings: RouteSettings(name: target),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
 
   /// 直接在应用内打开默认 qBittorrent 下载器的 WebUI
   Future<void> _openQbWebUi(BuildContext context) async {
@@ -52,6 +93,14 @@ class AppDrawer extends StatelessWidget {
       (c) => c.id == defaultId,
       orElse: () => qbClients.first,
     );
+
+    final shell = MainShellController.instance;
+    if (shell.isAttached) {
+      if (!isFixedSidebar) navigator.pop();
+      navigator.popUntil((route) => route.isFirst);
+      shell.openTab('/downloader_webui', config: config);
+      return;
+    }
 
     if (!isFixedSidebar) {
       navigator.pop();
@@ -115,6 +164,10 @@ class AppDrawer extends StatelessWidget {
             title: '主页',
             isActive: currentRoute == '/home' || currentRoute == '/',
             onTap: () {
+              if (MainShellController.instance.isAttached) {
+                _selectTab(context, '/');
+                return;
+              }
               if (!isFixedSidebar) {
                 Navigator.of(context).pop();
               }
@@ -147,6 +200,10 @@ class AppDrawer extends StatelessWidget {
             title: '下载管理',
             isActive: currentRoute == '/download_tasks',
             onTap: () {
+              if (MainShellController.instance.isAttached) {
+                _selectTab(context, '/download_tasks');
+                return;
+              }
               if (!isFixedSidebar) {
                 Navigator.of(context).pop();
               }
@@ -182,93 +239,32 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.dns,
             title: '站点配置',
             isActive: currentRoute == '/server_settings',
-            onTap: () {
-              if (!isFixedSidebar) {
-                Navigator.of(context).pop();
-              }
-              if (currentRoute != '/server_settings') {
-                if (isFixedSidebar) {
-                  Navigator.of(context).pushReplacement(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation1, animation2) =>
-                          const ServerSettingsPage(),
-                      settings: const RouteSettings(name: '/server_settings'),
-                      transitionDuration: Duration.zero,
-                      reverseTransitionDuration: Duration.zero,
-                    ),
-                  );
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ServerSettingsPage(),
-                      settings: const RouteSettings(name: '/server_settings'),
-                    ),
-                  );
-                }
-              }
-            },
+            onTap: () => _pushPage(
+              context,
+              '/server_settings',
+              (_) => const ServerSettingsPage(),
+            ),
           ),
           _DrawerItem(
             icon: Icons.settings_outlined,
             title: '设置',
             isActive: currentRoute == '/settings',
-            onTap: () async {
-              if (!isFixedSidebar) {
-                Navigator.of(context).pop();
-              }
-              if (currentRoute != '/settings') {
-                if (isFixedSidebar) {
-                  await Navigator.of(context).pushReplacement(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation1, animation2) =>
-                          const SettingsPage(),
-                      settings: const RouteSettings(name: '/settings'),
-                      transitionDuration: Duration.zero,
-                      reverseTransitionDuration: Duration.zero,
-                    ),
-                  );
-                } else {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SettingsPage(),
-                      settings: const RouteSettings(name: '/settings'),
-                    ),
-                  );
-                  // 从设置页面返回后，重新加载分类配置
-                  onSettingsChanged?.call();
-                }
-              }
-            },
+            onTap: () => _pushPage(
+              context,
+              '/settings',
+              (_) => const SettingsPage(),
+              onReturn: onSettingsChanged,
+            ),
           ),
           _DrawerItem(
             icon: Icons.info_outline,
             title: '关于',
             isActive: currentRoute == '/about',
-            onTap: () {
-              if (!isFixedSidebar) {
-                Navigator.of(context).pop();
-              }
-              if (currentRoute != '/about') {
-                if (isFixedSidebar) {
-                  Navigator.of(context).pushReplacement(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation1, animation2) =>
-                          const AboutPage(),
-                      settings: const RouteSettings(name: '/about'),
-                      transitionDuration: Duration.zero,
-                      reverseTransitionDuration: Duration.zero,
-                    ),
-                  );
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AboutPage(),
-                      settings: const RouteSettings(name: '/about'),
-                    ),
-                  );
-                }
-              }
-            },
+            onTap: () => _pushPage(
+              context,
+              '/about',
+              (_) => const AboutPage(),
+            ),
           ),
         ],
       ),
