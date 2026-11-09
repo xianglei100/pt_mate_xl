@@ -206,7 +206,7 @@ class _DownloadTasksPageState extends State<DownloadTasksPage> {
       currentRoute: '/download_tasks',
       appBar: AppBar(
         title: const Text('下载管理'),
-        actions: const [QbSpeedIndicator()],
+        actions: const [QbSpeedIndicator(active: true)],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

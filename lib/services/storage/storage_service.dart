@@ -47,6 +47,8 @@ class StorageKeys {
       'downloader.categories.$id';
   static String downloaderTagsKey(String id) => 'downloader.tags.$id';
   static String downloaderPathsKey(String id) => 'downloader.paths.$id';
+  static String downloaderCategoryPathsKey(String id) =>
+      'downloader.categoryPaths.$id';
 
   // 默认下载设置
   static const String defaultDownloadCategory = 'download.defaultCategory';
@@ -5839,6 +5841,31 @@ class StorageService {
     final prefs = await _prefs;
     return prefs.getStringList(StorageKeys.downloaderPathsKey(id)) ??
         <String>[];
+  }
+
+  // 各分类上次选定的保存路径（分类名 -> 保存路径）
+  Future<void> saveDownloaderCategoryPaths(
+    String id,
+    Map<String, String> categoryPaths,
+  ) async {
+    final prefs = await _prefs;
+    await prefs.setString(
+      StorageKeys.downloaderCategoryPathsKey(id),
+      jsonEncode(categoryPaths),
+    );
+  }
+
+  Future<Map<String, String>> loadDownloaderCategoryPaths(String id) async {
+    final prefs = await _prefs;
+    final str = prefs.getString(StorageKeys.downloaderCategoryPathsKey(id));
+    if (str == null) return <String, String>{};
+    try {
+      return (jsonDecode(str) as Map<String, dynamic>).map(
+        (category, path) => MapEntry(category, path as String),
+      );
+    } catch (_) {
+      return <String, String>{};
+    }
   }
 
   // 设备ID统一读写删除（使用安全存储，支持旧存储兼容与自动迁移；在桌面环境等不可用时降级到本地存储）

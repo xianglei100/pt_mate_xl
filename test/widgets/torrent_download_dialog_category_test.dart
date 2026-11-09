@@ -81,12 +81,35 @@ void main() {
     expect(find.text('不使用分类'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('选择分类后自动带入该分类上次的保存路径', (tester) async {
+    await _showDownloadDialog(
+      tester,
+      ['分类 0', '分类 1'],
+      categoryPaths: {'分类 1': '/srv/media/movies'},
+    );
+
+    await tester.tap(find.byType(DropdownButtonFormField<String?>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分类 1').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('/srv/media/movies'), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownButtonFormField<String?>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分类 0').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('/srv/media/movies'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _showDownloadDialog(
   WidgetTester tester,
-  List<String> categories,
-) async {
+  List<String> categories, {
+  Map<String, String>? categoryPaths,
+}) async {
   const config = QbittorrentConfig(
     id: 'qb-test',
     name: 'Test QB',
@@ -101,6 +124,10 @@ Future<void> _showDownloadDialog(
     StorageKeys.downloaderCategoriesKey(config.id): categories,
     StorageKeys.downloaderTagsKey(config.id): ['标签'],
     StorageKeys.downloaderPathsKey(config.id): ['/downloads'],
+    if (categoryPaths != null)
+      StorageKeys.downloaderCategoryPathsKey(config.id): jsonEncode(
+        categoryPaths,
+      ),
   });
 
   tester.view.physicalSize = const Size(393, 852);

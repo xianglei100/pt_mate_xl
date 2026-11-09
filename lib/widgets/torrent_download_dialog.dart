@@ -34,6 +34,7 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
   List<String> _categories = [];
   List<String> _tags = [];
   List<String> _paths = [];
+  final Map<String, String> _categoryPaths = {}; // 分类 -> 上次选定的保存路径
   bool _loading = false;
   String? _error;
   bool _startPaused = false; // 不立即开始（添加后暂停）
@@ -116,12 +117,17 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
       final cachedPaths = await StorageService.instance.loadDownloaderPaths(
         _selectedClient!.id,
       );
+      final cachedCategoryPaths = await StorageService.instance
+          .loadDownloaderCategoryPaths(_selectedClient!.id);
 
       if (mounted) {
         setState(() {
           _categories = cachedCategories;
           _tags = cachedTags;
           _paths = cachedPaths;
+          _categoryPaths
+            ..clear()
+            ..addAll(cachedCategoryPaths);
         });
       }
 
@@ -196,6 +202,21 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
     return await PasswordPromptDialog.show(context, clientName);
   }
 
+  Future<void> _rememberCategoryPath(String? category, String path) async {
+    if (category == null || category.isEmpty || _selectedClient == null) {
+      return;
+    }
+    if (path.isEmpty) {
+      _categoryPaths.remove(category);
+    } else {
+      _categoryPaths[category] = path;
+    }
+    await StorageService.instance.saveDownloaderCategoryPaths(
+      _selectedClient!.id,
+      _categoryPaths,
+    );
+  }
+
   Future<void> _setDownloadToLocal(bool value) async {
     setState(() => _downloadToLocal = value);
     await StorageService.instance.saveDefaultDownloadToLocal(value);
@@ -240,6 +261,9 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
         ? true
         : null;
 
+    final savePath = _savePathCtrl.text.trim();
+    await _rememberCategoryPath(_selectedCategory, savePath);
+
     if (!mounted) return;
     Navigator.pop(context, {
       'downloadToLocal': false,
@@ -247,9 +271,7 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
       'password': password,
       'category': _selectedCategory,
       'tags': _selectedTags.isEmpty ? null : _selectedTags,
-      'savePath': _savePathCtrl.text.trim().isEmpty
-          ? null
-          : _savePathCtrl.text.trim(),
+      'savePath': savePath.isEmpty ? null : savePath,
       'autoTMM': autoTMM,
       'startPaused': _startPaused,
       'useToken': _useToken,
@@ -514,50 +536,27 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
               border: OutlineInputBorder(),
               isDense: true,
             ),
+            isExpanded: true,
             selectedItemBuilder: (context) {
               return _clients.map((client) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                // 响应式宽度：手机上限制最大宽度，大屏上基于对话框容器宽度计算
-                final maxWidth = screenWidth > 600
-                    ? 400.0 *
-                          0.6 // 大屏上使用对话框容器宽度的60%
-                    : 240.0; // 小屏上限制240px
-
-                return SizedBox(
-                  width: maxWidth,
-                  child: Text(
-                    client is QbittorrentConfig
-                        ? '${client.name} (${client.host}:${client.port})'
-                        : client.name,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
+                return Text(
+                  client is QbittorrentConfig
+                      ? '${client.name} (${client.host}:${client.port})'
+                      : client.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 );
               }).toList();
             },
             items: _clients.map((client) {
               return DropdownMenuItem(
                 value: client,
-                child: Builder(
-                  builder: (context) {
-                    final screenWidth = MediaQuery.of(context).size.width;
-                    // 响应式宽度：手机上限制最大宽度，大屏上允许更宽
-                    final maxWidth = screenWidth > 600
-                        ? screenWidth *
-                              0.6 // 大屏上使用60%宽度
-                        : 240.0; // 小屏上限制200px
-
-                    return SizedBox(
-                      width: maxWidth,
-                      child: Text(
-                        client is QbittorrentConfig
-                            ? '${client.name} (${client.host}:${client.port})'
-                            : client.name,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    );
-                  },
+                child: Text(
+                  client is QbittorrentConfig
+                      ? '${client.name} (${client.host}:${client.port})'
+                      : client.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               );
             }).toList(),
@@ -622,7 +621,11 @@ class _TorrentDownloadDialogState extends State<TorrentDownloadDialog> {
                 ),
               ),
             ],
-            onChanged: (cat) => setState(() => _selectedCategory = cat),
+            onChanged: (cat) => setState(() {
+              _selectedCategory = cat;
+              _savePathCtrl.text =
+                  (cat == null || cat.isEmpty) ? '' : _categoryPaths[cat] ?? '';
+            }),
           ),
           const SizedBox(height: 16),
 

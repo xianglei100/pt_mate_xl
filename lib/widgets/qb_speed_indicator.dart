@@ -12,7 +12,10 @@ import '../utils/screen_utils.dart';
 
 // 右上角全局：默认下载器传输信息，每5秒刷新
 class QbSpeedIndicator extends StatefulWidget {
-  const QbSpeedIndicator({super.key});
+  const QbSpeedIndicator({super.key, this.active = false});
+
+  /// 仅下载管理页启用，避免应用启动时就请求下载器。
+  final bool active;
 
   @override
   State<QbSpeedIndicator> createState() => _QbSpeedIndicatorState();
@@ -27,6 +30,7 @@ class _QbSpeedIndicatorState extends State<QbSpeedIndicator> {
   @override
   void initState() {
     super.initState();
+    if (!widget.active) return;
     _fetch();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _fetch());
   }
@@ -156,6 +160,13 @@ class _QbSpeedIndicatorState extends State<QbSpeedIndicator> {
             ? colorScheme.onPrimaryContainer
             : colorScheme.onPrimary);
 
+    if (!widget.active) {
+      return IconButton(
+        onPressed: _openDownloader,
+        icon: Icon(Icons.cloud_download, color: foregroundColor),
+        tooltip: '下载管理',
+      );
+    }
     if (_err != null) {
       return IconButton(
         onPressed: _openDownloader,
