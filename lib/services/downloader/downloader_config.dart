@@ -160,6 +160,27 @@ class QbittorrentConfig extends DownloaderConfig {
   @override
   int get defaultPort => 8080;
 
+  /// 基础访问地址（含协议与端口），API 与 WebUI 共用
+  String get baseUrl {
+    var urlStr = host.trim();
+    if (!urlStr.startsWith(RegExp(r'https?://'))) {
+      urlStr = 'http://$urlStr';
+    }
+
+    try {
+      final uri = Uri.parse(urlStr);
+      // 优先使用配置中的端口，如果配置为0且URL中包含端口则使用URL中的端口
+      final effectivePort = (port > 0) ? port : (uri.hasPort ? uri.port : null);
+      var result = uri.replace(port: effectivePort).toString();
+      if (result.endsWith('/')) {
+        result = result.substring(0, result.length - 1);
+      }
+      return result;
+    } catch (_) {
+      return urlStr;
+    }
+  }
+
   /// 从JSON创建配置
   factory QbittorrentConfig.fromJson(Map<String, dynamic> json) {
     return DownloaderConfig._createFromConfig(

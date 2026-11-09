@@ -4,6 +4,10 @@ import '../pages/download_tasks_page.dart';
 import '../pages/server_settings_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/about_page.dart';
+import '../pages/downloader_webui_page.dart';
+import '../services/downloader/downloader_config.dart';
+import '../services/storage/storage_service.dart';
+import '../utils/notification_helper.dart';
 import '../app.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -17,6 +21,60 @@ class AppDrawer extends StatelessWidget {
     this.currentRoute,
     this.isFixedSidebar = false,
   });
+
+  /// 直接在应用内打开默认 qBittorrent 下载器的 WebUI
+  Future<void> _openQbWebUi(BuildContext context) async {
+    final navigator = Navigator.of(context);
+
+    final List<QbittorrentConfig> qbClients;
+    final String? defaultId;
+    try {
+      final configs = await StorageService.instance.loadDownloaderConfigs();
+      defaultId = await StorageService.instance.loadDefaultDownloaderId();
+      qbClients = configs
+          .map((data) => DownloaderConfig.fromJson(data))
+          .whereType<QbittorrentConfig>()
+          .toList();
+    } catch (e) {
+      if (context.mounted) {
+        NotificationHelper.showError(context, '读取下载器配置失败：$e');
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    if (qbClients.isEmpty) {
+      NotificationHelper.showError(context, '还没有配置 qBittorrent 下载器');
+      return;
+    }
+
+    final config = qbClients.firstWhere(
+      (c) => c.id == defaultId,
+      orElse: () => qbClients.first,
+    );
+
+    if (!isFixedSidebar) {
+      navigator.pop();
+    }
+    if (isFixedSidebar) {
+      navigator.pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation1, animation2) =>
+              DownloaderWebUiPage(config: config),
+          settings: const RouteSettings(name: '/downloader_webui'),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
+      );
+    } else {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => DownloaderWebUiPage(config: config),
+          settings: const RouteSettings(name: '/downloader_webui'),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +171,12 @@ class AppDrawer extends StatelessWidget {
                 }
               }
             },
+          ),
+          _DrawerItem(
+            icon: Icons.web_asset,
+            title: 'qBittorrent WebUI',
+            isActive: currentRoute == '/downloader_webui',
+            onTap: () => _openQbWebUi(context),
           ),
           _DrawerItem(
             icon: Icons.dns,

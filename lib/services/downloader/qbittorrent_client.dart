@@ -72,34 +72,7 @@ class QbittorrentClient
   }
 
   /// 获取基础URL
-  String get _baseUrl => _buildBase(config);
-
-  /// 构建基础URL，处理各种格式的主机地址
-  String _buildBase(QbittorrentConfig c) {
-    var urlStr = c.host.trim();
-    // 补全协议
-    if (!urlStr.startsWith(RegExp(r'https?://'))) {
-      urlStr = 'http://$urlStr';
-    }
-
-    try {
-      final uri = Uri.parse(urlStr);
-      // 优先使用配置中的端口，如果配置为0且URL中包含端口则使用URL中的端口
-      final port = (c.port > 0) ? c.port : (uri.hasPort ? uri.port : null);
-
-      // 构建新的URI，保留原有的path
-      final newUri = uri.replace(port: port);
-      var result = newUri.toString();
-
-      // 移除末尾的斜杠，因为API路径通常以斜杠开头
-      if (result.endsWith('/')) {
-        result = result.substring(0, result.length - 1);
-      }
-      return result;
-    } catch (e) {
-      return urlStr;
-    }
-  }
+  String get _baseUrl => config.baseUrl;
 
   /// 获取API路径前缀（根据版本决定）
   String get _apiPrefix {
